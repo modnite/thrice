@@ -1,0 +1,31 @@
+services:
+  postgres:
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  app:
+    build:
+      context: .
+      target: deps
+    command: ["pnpm", "--filter", "web", "dev"]
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/repo
+      - /repo/node_modules
+      - /repo/apps/web/.next
+    healthcheck:
+      disable: true
+
+  worker:
+    build:
+      context: .
+      target: deps
+    command: ["pnpm", "--filter", "web", "exec", "tsx", "watch", "src/worker/index.ts"]
+    volumes:
+      - .:/repo
+      - /repo/node_modules

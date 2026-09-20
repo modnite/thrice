@@ -1,0 +1,13 @@
+﻿SKU Code;SKU Name;Tracked individually;Articles;In stock;For rent;For sale;Available;Reserved;Out of use;Lost;Sold;Products
+BIKE-CITY;City Bike (Blue);No;6;6;6;0;6;0;0;0;0;1
+BIKE-MTB;Mountain Bike (Red);Yes;4;4;4;0;4;0;0;0;0;1
+BIKE-KID;Kids Bike (Green);No;0;0;0;0;0;0;0;0;0;1
+TENT-4;4-Person Tent;No;5;5;5;0;5;0;0;0;0;1
+SLEEP-BAG;Sleeping Bag (-5 C);No;12;12;12;0;12;0;0;0;0;1
+STOVE-1;Single-Burner Camp Stove;No;5;5;5;0;5;0;0;0;0;1
+KAYAK-1;Single Kayak;Yes;3;3;3;0;3;0;0;0;0;1
+SUP-1;Inflatable Paddle Board;Yes;2;2;2;0;2;0;0;0;0;1
+CAM-KIT;Mirrorless Camera Body with Kit Lens;Yes;2;2;2;0;2;0;0;0;0;1
+TRIPOD-CF;Carbon Fibre Tripod;No;3;3;3;0;3;0;0;0;0;1
+DELIVERY;Delivery;No;0;0;0;0;0;0;0;0;0;1
+LATE-FEE;Late Return Fee;No;0;0;0;0;0;0;0;0;0;1

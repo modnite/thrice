@@ -1,0 +1,109 @@
+openapi: 3.0.3
+info:
+  title: THRICE Public API
+  version: "1.0.0"
+  description: >
+    Server-to-server API for the customer-facing website. Additive and versioned in the path: breaking changes
+    must ship as /api/public/v2, never by editing v1. See docs/PUBLIC_API.md.
+servers:
+  - url: /api/public/v1
+security:
+  - bearer: []
+paths:
+  /health:
+    get:
+      summary: Configuration check
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, properties: { status: { type: string }, api: { type: string } } } } } }
+        "401": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /availability:
+    get:
+      summary: Busy intervals for a variant inside a window
+      parameters:
+        - { name: productId, in: query, required: true, schema: { type: string } }
+        - { name: variantId, in: query, required: false, schema: { type: string } }
+        - { name: from, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date-time } }
+      responses:
+        "200":
+          description: Times the variant cannot be booked
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [busy]
+                properties:
+                  busy:
+                    type: array
+                    items: { type: object, required: [start, end], properties: { start: { type: string, format: date-time }, end: { type: string, format: date-time } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /quote:
+    get:
+      summary: Price for one unit of a variant over a window
+      parameters:
+        - { name: variantId, in: query, required: true, schema: { type: string } }
+        - { name: start, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: end, in: query, required: true, schema: { type: string, format: date-time } }
+      responses:
+        "200":
+          description: Price (amount is null when the variant has no rate)
+          content: { application/json: { schema: { type: object, required: [amount, currency], properties: { amount: { type: number, nullable: true }, currency: { type: string } } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /orders:
+    post:
+      summary: Create a website booking (idempotent on reference)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId, variantId, start, end, customer, reference]
+              properties:
+                productId: { type: string }
+                variantId: { type: string }
+                start: { type: string, format: date-time }
+                end: { type: string, format: date-time }
+                reference: { type: string, pattern: "^AIS-[A-Z0-9]{6}$" }
+                notes: { type: string, maxLength: 1500 }
+                customer:
+                  type: object
+                  required: [name, email, phone]
+                  properties:
+                    name: { type: string }
+                    email: { type: string, format: email }
+                    phone: { type: string }
+                    marketingConsent: { type: boolean }
+      responses:
+        "201": { $ref: "#/components/responses/Order" }
+        "200": { $ref: "#/components/responses/Order" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /orders/{id}:
+    delete:
+      summary: Cancel an upcoming website order
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Cancelled (or already cancelled) }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+components:
+  securitySchemes:
+    bearer: { type: http, scheme: bearer }
+  responses:
+    Order:
+      description: The order
+      content:
+        application/json:
+          schema: { type: object, required: [id, orderNumber, total, currency], properties: { id: { type: string }, orderNumber: { type: integer }, total: { type: number }, currency: { type: string } } }
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: { type: object, required: [error], properties: { error: { type: object, required: [code, message], properties: { code: { type: string }, message: { type: string } } } } }

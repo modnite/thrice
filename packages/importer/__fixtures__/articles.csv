@@ -1,0 +1,18 @@
+﻿id;article_code;sku_code;sku_name;status;allocations;usageCount;usageHours;tracked_individually;quantity;state;purchase_date;purchase_price;purchase_currency
+Internal ID;Article ID;SKU Code;SKU Name;Status;Allocation;Times used;Hours used;Tracked individually;Quantity;Current state;Purchase Date;Purchase Price;Purchase Currency
+demo000001;BIK0001A1;BIKE-MTB;Mountain Bike (Red);IN_USE;rental;3;12 h;yes;1;In;2024-06-01;540.00;USD
+demo000002;BIK0002A2;BIKE-MTB;Mountain Bike (Red);IN_USE;rental;3;12 h;yes;1;In;2024-06-01;540.00;USD
+demo000003;BIK0003A3;BIKE-MTB;Mountain Bike (Red);IN_USE;rental;3;12 h;yes;1;In;2024-06-01;540.00;USD
+demo000004;BIK0004A4;BIKE-MTB;Mountain Bike (Red);IN_USE;rental;3;12 h;yes;1;In;2024-06-01;540.00;USD
+demo000005;KAY0005A1;KAYAK-1;Single Kayak;IN_USE;rental;3;12 h;yes;1;In;2024-06-01;620.00;USD
+demo000006;KAY0006A2;KAYAK-1;Single Kayak;IN_USE;rental;3;12 h;yes;1;In;2024-06-01;620.00;USD
+demo000007;KAY0007A3;KAYAK-1;Single Kayak;IN_USE;rental;3;12 h;yes;1;In;2024-06-01;620.00;USD
+demo000008;SUP0008A1;SUP-1;Inflatable Paddle Board;IN_USE;rental;3;12 h;yes;1;In;2024-06-01;480.00;USD
+demo000009;SUP0009A2;SUP-1;Inflatable Paddle Board;IN_USE;rental;3;12 h;yes;1;In;2024-06-01;480.00;USD
+demo000010;CAM0010A1;CAM-KIT;Mirrorless Camera Body with Kit Lens;IN_USE;rental;3;12 h;yes;1;In;2024-06-01;1499.00;USD
+demo000011;CAM0011A2;CAM-KIT;Mirrorless Camera Body with Kit Lens;IN_USE;rental;3;12 h;yes;1;In;2024-06-01;1499.00;USD
+demo000012;BULK-BIKE-CITY;BIKE-CITY;City Bike (Blue);IN_USE;rental;3;12 h;no;6;In;2024-05-15;210.00;USD
+demo000013;BULK-TENT-4;TENT-4;4-Person Tent;IN_USE;rental;3;12 h;no;5;In;2024-05-15;130.00;USD
+demo000014;BULK-SLEEP-BAG;SLEEP-BAG;Sleeping Bag (-5 C);IN_USE;rental;3;12 h;no;12;In;2024-05-15;35.00;USD
+demo000015;BULK-STOVE-1;STOVE-1;Single-Burner Camp Stove;IN_USE;rental;3;12 h;no;5;In;2024-05-15;28.00;USD
+demo000016;BULK-TRIPOD-CF;TRIPOD-CF;Carbon Fibre Tripod;IN_USE;rental;3;12 h;no;3;In;2024-05-15;90.00;USD

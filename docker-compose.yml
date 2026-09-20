@@ -1,0 +1,144 @@
+# The database and cache addresses are built here from the POSTGRES_* values, so a password is set in one place.
+# Use letters and numbers in POSTGRES_PASSWORD (other characters would need URL-encoding).
+x-app-env: &app-env
+  DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+  REDIS_URL: redis://redis:6379
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build: .
+    command: ["sh", "docker/entrypoint.sh"]
+    env_file: .env
+    environment: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./docker/entrypoint.sh:/repo/docker/entrypoint.sh:ro
+
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      <<: *app-env
+      # Docker auto-sets HOSTNAME to the container id; Next's standalone
+      # server binds to that literal value instead of all interfaces unless
+      # overridden, which breaks in-container healthchecks against 127.0.0.1.
+      HOSTNAME: "0.0.0.0"
+    ports:
+      # APP_PORT changes the port on the host (for example when 3000 is taken). Set APP_BIND=127.0.0.1 when a
+      # reverse proxy on the same machine is the only way in.
+      - "${APP_BIND:-0.0.0.0}:${APP_PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # Nightly database dump into the `backups` volume, keeping BACKUP_KEEP_DAYS days. Each dump is
+  # written to a temp file first and only renamed on success, so a failed run never leaves a
+  # truncated backup behind. Copy the volume off the machine too (see README, Backup & restore).
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
+    volumes:
+      - backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint:
+      - sh
+      - -c
+      - |
+        while true; do
+          out=/backups/thrice-$$(date +%Y%m%d-%H%M%S).sql
+          if pg_dump -f "$$out.tmp" && mv "$$out.tmp" "$$out" && gzip -f "$$out"; then
+            echo "backup written: $$out.gz"
+          else
+            rm -f "$$out.tmp" "$$out"
+            echo "backup FAILED" >&2
+          fi
+          find /backups -name 'thrice-*.sql.gz' -mtime +$$BACKUP_KEEP_DAYS -delete
+          sleep $$((BACKUP_INTERVAL_HOURS * 3600))
+        done
+
+  worker:
+    build: .
+    restart: unless-stopped
+    command: ["pnpm", "--filter", "web", "exec", "tsx", "src/worker/index.ts"]
+    env_file: .env
+    environment: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  # Optional HTTPS front door with automatic certificates. Off unless asked for:
+  #   docker compose --profile proxy up -d
+  # Needs THRICE_DOMAIN in .env, DNS for it pointing at this machine, and ports 80 and 443 open.
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["proxy"]
+    restart: unless-stopped
+    environment:
+      THRICE_DOMAIN: ${THRICE_DOMAIN:-}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  caddy_data:
+  caddy_config:
+  postgres_data:
+  redis_data:
+  backups:

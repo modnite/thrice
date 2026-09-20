@@ -1,0 +1,576 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Store / Auth ----------
+
+model Store {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  tagline   String?
+  address   String?
+  phone     String?
+  email     String?
+  currency  String   @default("USD")
+  timezone  String   @default("UTC")
+  /// Weekday -> {open,close} (24h "HH:MM") or null when closed. Keys "0".."6" (0 = Sunday). Null column = no restriction.
+  openingHours Json?
+  /// Dates that run on different hours from the normal week (public holidays): { hours: {mode,open?,close?}, dates: [{date,name?}] }. Null = none.
+  holidays     Json?
+  /// Outgoing mail server for this store: { host, port, secure, user?, passwordSealed?, from }. The password is encrypted. Null = use the server's SMTP_* settings.
+  smtpConfig   Json?
+  /// The store's payment options: [{ id, label, description, enabled }]. Null = defaults.
+  paymentMethodConfig Json?
+  /// Email wording; {{orderNumber}}, {{customer}} and {{storeName}} are replaced when sending.
+  emailSubject        String?
+  emailIntro          String?
+  emailFooter         String?
+  sendConfirmationOnCreate Boolean @default(false)
+  /// Where this THRICE is reached from outside, and where the customer website lives. Shown in Settings > Integrations.
+  publicUrl  String?
+  websiteUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  apiKeys     ApiKey[]
+  memberships StoreMembership[]
+  categories  Category[]
+  products    Product[]
+  skus        Sku[]
+  variants    ProductVariant[]
+  articles    Article[]
+  customers   Customer[]
+  orders      Order[]
+  auditLogs   AuditLog[]
+  importRuns  ImportRun[]
+
+  @@map("stores")
+}
+
+/// Small key/value settings owned by the app itself (for example the one-time first-run setup code).
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("app_settings")
+}
+
+/// A key the customer website uses to reach the public API. Only the SHA-256 of the key is stored.
+model ApiKey {
+  id         String    @id @default(cuid())
+  storeId    String
+  name       String
+  keyHash    String    @unique
+  /// First characters of the key, so people can tell keys apart without seeing the key.
+  keyPrefix  String
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@map("api_keys")
+}
+
+enum StoreRole {
+  OWNER
+  ADMIN
+  STAFF
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships StoreMembership[]
+  sessions    Session[]
+  auditLogs   AuditLog[]
+
+  @@map("users")
+}
+
+model StoreMembership {
+  id      String    @id @default(cuid())
+  storeId String
+  userId  String
+  role    StoreRole @default(STAFF)
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, userId])
+  @@index([userId])
+  @@map("store_memberships")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  ipAddress String?
+  userAgent String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// ---------- Catalog ----------
+
+enum ProductStatus {
+  PUBLIC
+  HIDDEN
+}
+
+model Category {
+  id           String   @id @default(cuid())
+  storeId      String
+  name         String
+  description  String?
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  store    Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  products ProductCategory[]
+
+  @@unique([storeId, name])
+  @@index([storeId, displayOrder])
+  @@map("categories")
+}
+
+model Product {
+  id             String        @id @default(cuid())
+  storeId        String
+  name           String
+  status         ProductStatus @default(PUBLIC)
+  tags           String[]      @default([])
+  salesChannels  String[]      @default([])
+  priceFrom      Decimal       @default(0) @db.Decimal(12, 2)
+  deposit        Decimal       @default(0) @db.Decimal(12, 2)
+  taxPercentage  Decimal?      @db.Decimal(5, 2)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  store      Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  categories ProductCategory[]
+  skus       Sku[]
+  variants   ProductVariant[]
+  bookings   OrderBooking[]
+
+  @@unique([storeId, name])
+  @@index([storeId, status])
+  @@map("products")
+}
+
+model ProductCategory {
+  productId  String
+  categoryId String
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([productId, categoryId])
+  @@map("product_categories")
+}
+
+model Sku {
+  id                  String   @id @default(cuid())
+  storeId             String
+  productId           String?
+  code                String
+  name                String
+  trackedIndividually Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  store          Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product        Product?               @relation(fields: [productId], references: [id], onDelete: SetNull)
+  articles       Article[]
+  orderLines     OrderLine[]
+  variantOptions VariantSlotSkuOption[]
+
+  @@unique([storeId, code])
+  @@index([productId])
+  @@map("skus")
+}
+
+model ProductVariant {
+  id           String   @id @default(cuid())
+  storeId      String
+  productId    String
+  name         String
+  displayOrder Int      @default(0)
+  /// ELAPSED: a day is 24h from pickup. CALENDAR_DAYS ("Starting at"): every calendar day touched is charged.
+  pricingMode  PricingMode @default(ELAPSED)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  store      Store                 @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product    Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
+  slots      VariantResourceSlot[]
+  priceTiers PriceTier[]
+  bookings   OrderBooking[]
+
+  @@unique([storeId, productId, name])
+  @@index([productId])
+  @@map("product_variants")
+}
+
+/// A duration-bracket rate: "1 hour" = X, "1 day" = Y, etc. `durationMinutes`
+/// null means a flat/open-ended rate (used for the "Default" variant created
+/// from a CSV import's single Product.priceFrom, where no real tiers exist).
+/// The booking price is resolved server-side from the tier that best matches
+/// the requested order window — never trusted from the client.
+model PriceTier {
+  id              String   @id @default(cuid())
+  storeId         String
+  variantId       String
+  durationMinutes Int?
+  price           Decimal  @db.Decimal(12, 2)
+  /// Price for every block after the first (falls back to `price`).
+  additionalPrice Decimal? @db.Decimal(12, 2)
+  displayOrder    Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@index([variantId])
+  @@map("price_tiers")
+}
+
+model VariantResourceSlot {
+  id        String @id @default(cuid())
+  variantId String
+  slotIndex Int
+  quantity  Int    @default(1)
+
+  variant ProductVariant         @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  options VariantSlotSkuOption[]
+  lines   OrderLine[]
+
+  @@unique([variantId, slotIndex])
+  @@map("variant_resource_slots")
+}
+
+model VariantSlotSkuOption {
+  id     String @id @default(cuid())
+  slotId String
+  skuId  String
+
+  slot VariantResourceSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  sku  Sku                 @relation(fields: [skuId], references: [id], onDelete: Cascade)
+
+  @@unique([slotId, skuId])
+  @@index([skuId])
+  @@map("variant_slot_sku_options")
+}
+
+enum ArticleStatus {
+  IN_USE
+  OUT_OF_USE
+  LOST
+}
+
+enum ArticleAllocation {
+  RENTAL
+  SALE
+}
+
+enum ArticleState {
+  IN
+  OUT
+}
+
+model Article {
+  id               String            @id @default(cuid())
+  storeId          String
+  skuId            String
+  articleCode      String
+  status           ArticleStatus     @default(IN_USE)
+  allocation       ArticleAllocation @default(RENTAL)
+  usageCount       Int               @default(0)
+  usageHours       Decimal           @default(0) @db.Decimal(10, 1)
+  quantity         Int               @default(1)
+  currentState     ArticleState      @default(IN)
+  purchaseDate     DateTime?
+  purchasePrice    Decimal?          @db.Decimal(12, 2)
+  purchaseCurrency String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  store      Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  sku        Sku         @relation(fields: [skuId], references: [id], onDelete: Cascade)
+  orderLines OrderLine[]
+
+  @@unique([storeId, articleCode])
+  @@index([skuId, status])
+  @@map("articles")
+}
+
+// ---------- Customers / Orders ----------
+
+model Customer {
+  id        String   @id @default(cuid())
+  storeId   String
+  name      String
+  email     String?
+  phone     String?
+  company   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store   Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  persons OrderPerson[]
+
+  @@index([storeId, name])
+  @@map("customers")
+}
+
+enum OrderStatus {
+  UPCOMING
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PAID
+  UNPAID
+  PARTIAL
+}
+
+enum OrderChannel {
+  ONLINE
+  ADMIN
+  CHECKIN
+}
+
+enum PricingMode {
+  ELAPSED
+  CALENDAR_DAYS
+}
+
+enum DepositStatus {
+  PENDING
+  HELD
+  CAPTURED
+  RELEASED
+}
+
+enum ReturnMethod {
+  STORE
+  PICKUP
+}
+
+enum OrderType {
+  BOOKING
+  SALE
+  SUBSCRIPTION
+  BUYBACK
+}
+
+model Order {
+  id               String        @id @default(cuid())
+  storeId          String
+  orderNumber      Int
+  status           OrderStatus   @default(UPCOMING)
+  type             OrderType     @default(BOOKING)
+  prepared         Boolean       @default(false)
+  paymentStatus    PaymentStatus @default(UNPAID)
+  /// Name of the payment option used (from Settings), kept as text so history survives renames.
+  paymentMethod    String?
+  /// Receipt number or processor transaction ID, so a payment can be traced later.
+  paymentReference String?
+  returnMethod     ReturnMethod  @default(STORE)
+  /// Actual start/end, set when staff press Start / End (orders never roll over on their own).
+  startedAt        DateTime?
+  endedAt          DateTime?
+  deliveryRequired Boolean       @default(false)
+  startAt          DateTime
+  endAt            DateTime
+  totalPrice       Decimal       @default(0) @db.Decimal(12, 2)
+  discountPercent  Decimal?      @db.Decimal(5, 2)
+  currency         String        @default("USD")
+  channel          OrderChannel  @default(ADMIN)
+  notes            String?
+  cancelledAt      DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  store    Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  persons  OrderPerson[]
+  bookings OrderBooking[]
+  deposit  OrderDeposit?
+
+  @@unique([storeId, orderNumber])
+  @@index([storeId, status, startAt])
+  @@index([storeId, status, endAt])
+  @@map("orders")
+}
+
+/// A security deposit for an order. Recorded manually (no card-hold gateway): staff mark it held,
+/// then release it, or capture some or all of it (for damage or late fees) with a reason.
+model OrderDeposit {
+  id             String        @id @default(cuid())
+  orderId        String        @unique
+  amount         Decimal       @db.Decimal(12, 2)
+  status         DepositStatus @default(PENDING)
+  method         String?
+  capturedAmount Decimal?      @db.Decimal(12, 2)
+  note           String?
+  heldAt         DateTime?
+  resolvedAt     DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("order_deposits")
+}
+
+/// One row per person attached to an order (matches TWICE's real "persons" model —
+/// an order can have several people, one of whom is the liable/paying customer).
+model OrderPerson {
+  id               String  @id @default(cuid())
+  orderId          String
+  customerId       String?
+  name             String
+  email            String?
+  phone            String?
+  isLiableCustomer Boolean @default(false)
+  endedAt          DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  order    Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customer Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  bookings OrderBooking[]
+
+  @@index([orderId])
+  @@index([customerId])
+  @@map("order_persons")
+}
+
+/// One row per "product added to the cart" — carries price/quantity/who-it's-for.
+/// A booking's physical fulfillment (which SKU/article satisfies each resource
+/// slot the variant needs) is recorded separately in OrderLine.
+model OrderBooking {
+  id        String    @id @default(cuid())
+  orderId   String
+  personId  String?
+  productId String
+  variantId String
+  quantity  Int       @default(1)
+  priceEach Decimal   @default(0) @db.Decimal(12, 2)
+  notes     String?
+  startAt   DateTime?
+  endAt     DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  order   Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  person  OrderPerson?   @relation(fields: [personId], references: [id], onDelete: SetNull)
+  product Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  lines   OrderLine[]
+
+  @@index([orderId])
+  @@index([variantId])
+  @@map("order_bookings")
+}
+
+/// Physical fulfillment of one resource slot of a booking: which SKU (and,
+/// for individually-tracked SKUs, which specific article) was reserved.
+model OrderLine {
+  id        String   @id @default(cuid())
+  bookingId String
+  slotId    String?
+  skuId     String
+  articleId String?
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+
+  booking OrderBooking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  slot    VariantResourceSlot? @relation(fields: [slotId], references: [id], onDelete: SetNull)
+  sku     Sku                  @relation(fields: [skuId], references: [id], onDelete: Restrict)
+  article Article?             @relation(fields: [articleId], references: [id], onDelete: SetNull)
+
+  @@index([skuId])
+  @@index([articleId])
+  @@index([bookingId])
+  @@map("order_lines")
+}
+
+// ---------- Audit / Import ----------
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  storeId    String
+  userId     String?
+  action     String
+  entityType String
+  entityId   String
+  diff       Json?
+  createdAt  DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  user  User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([storeId, entityType, entityId])
+  @@index([storeId, createdAt])
+  @@map("audit_logs")
+}
+
+enum ImportFileType {
+  CATEGORIES
+  PRODUCTS
+  SKUS
+  ARTICLES
+}
+
+enum ImportRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model ImportRun {
+  id           String          @id @default(cuid())
+  storeId      String
+  fileType     ImportFileType
+  fileName     String
+  status       ImportRunStatus @default(RUNNING)
+  rowsTotal    Int             @default(0)
+  rowsCreated  Int             @default(0)
+  rowsUpdated  Int             @default(0)
+  rowsSkipped  Int             @default(0)
+  rowsErrored  Int             @default(0)
+  errors       Json?
+  startedAt    DateTime        @default(now())
+  finishedAt   DateTime?
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, fileType])
+  @@map("import_runs")
+}

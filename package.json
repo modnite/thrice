@@ -1,0 +1,23 @@
+{
+  "name": "thrice",
+  "private": true,
+  "version": "0.1.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@12.4.2",
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "start": "pnpm --filter web start",
+    "worker": "pnpm --filter web worker",
+    "db:generate": "pnpm --filter @thrice/db generate",
+    "db:migrate": "pnpm --filter @thrice/db migrate:dev",
+    "db:deploy": "pnpm --filter @thrice/db migrate:deploy",
+    "db:setup-code": "pnpm --filter @thrice/db setup-code",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "license": "AGPL-3.0-only"
+}
