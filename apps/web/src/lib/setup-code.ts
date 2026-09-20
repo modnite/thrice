@@ -11,7 +11,11 @@ const ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
  * and prints it; this covers installs started another way (for example plain `pnpm dev`) by creating it here and
  * writing it to the server log.
  */
+/** The one-time setup code is opt-in: set REQUIRE_SETUP_CODE=true on a server the internet can reach. */
+export const setupCodeRequired = () => process.env.REQUIRE_SETUP_CODE === "true";
+
 export async function ensureSetupCode(): Promise<void> {
+  if (!setupCodeRequired()) return;
   if (await prisma.appSetting.findUnique({ where: { key: KEY } })) return;
   const pick = () => Array.from({ length: 4 }, () => ALPHABET[randomInt(ALPHABET.length)]).join("");
   const code = `${pick()}-${pick()}`;

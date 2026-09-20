@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { Logo } from "@/components/logo";
-import { ensureSetupCode } from "@/lib/setup-code";
+import { ensureSetupCode, setupCodeRequired } from "@/lib/setup-code";
 import { isSetUp } from "./actions";
 import { SetupForm } from "./setup-form";
 
@@ -19,7 +19,7 @@ export default async function SetupPage() {
         <div className="p-6">
           <p className="mb-1 font-semibold">Welcome. Let&apos;s set up your rental admin.</p>
           <p className="mb-6 text-sm text-neutral-500">This takes a minute. You can change all of it later in Settings.</p>
-          <SetupForm />
+          <SetupForm requireCode={setupCodeRequired()} />
         </div>
       </div>
     </div>

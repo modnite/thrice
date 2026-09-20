@@ -20,6 +20,8 @@ const makeCode = () => {
 };
 
 async function main() {
+  // Opt-in: only servers the internet can reach need it. Set REQUIRE_SETUP_CODE=true to turn it on.
+  if (process.env.REQUIRE_SETUP_CODE !== "true") return;
   if ((await prisma.store.count()) > 0) {
     await prisma.appSetting.deleteMany({ where: { key: KEY } });
     return;

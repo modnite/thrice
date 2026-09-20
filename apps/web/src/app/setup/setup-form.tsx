@@ -6,7 +6,7 @@ import { setupAction, type SetupState } from "./actions";
 
 const CURRENCIES = ["TTD", "USD", "EUR", "GBP", "CAD", "JMD", "BBD", "GYD", "XCD", "AUD", "NZD", "ZAR", "INR"];
 
-export function SetupForm() {
+export function SetupForm({ requireCode }: { requireCode: boolean }) {
   const [state, action, pending] = useActionState<SetupState, FormData>(setupAction, {});
   const formProps = useNoResetForm(action, state);
   const [timezone, setTimezone] = useState("");
@@ -14,6 +14,7 @@ export function SetupForm() {
 
   return (
     <form {...formProps} className="space-y-4">
+      {requireCode && (
       <div>
         <label htmlFor="setupCode" className="mb-1 block text-sm font-medium">Setup code</label>
         <input id="setupCode" name="setupCode" required className="input font-mono uppercase" placeholder="XXXX-XXXX" autoComplete="off" />
@@ -21,6 +22,7 @@ export function SetupForm() {
           Printed in the server log. Run <code>docker compose logs migrate</code> (or <code>logs app</code>) to see it. This stops a stranger claiming a new server.
         </p>
       </div>
+      )}
       <div>
         <label htmlFor="storeName" className="mb-1 block text-sm font-medium">Business name</label>
         <input id="storeName" name="storeName" required className="input" placeholder="Island Gear Rentals" />

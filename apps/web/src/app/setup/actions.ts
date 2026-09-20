@@ -7,6 +7,7 @@ import { prisma } from "@thrice/db";
 import { hashPassword } from "@thrice/shared";
 import { login } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { setupCodeRequired } from "@/lib/setup-code";
 import { loadDemoData } from "@/lib/demo-data";
 import { logger } from "@/lib/logger";
 
@@ -46,7 +47,8 @@ export async function setupAction(_prev: SetupState, formData: FormData): Promis
   const timezone = text("timezone") || "UTC";
 
   const setupCode = text("setupCode");
-  if (!setupCode) return { error: "Enter the setup code from the server log." };
+  const needCode = setupCodeRequired();
+  if (needCode && !setupCode) return { error: "Enter the setup code from the server log." };
   if (!storeName) return { error: "Enter your business name." };
   if (!name) return { error: "Enter your name." };
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { error: "Enter a valid email address." };
@@ -65,12 +67,14 @@ export async function setupAction(_prev: SetupState, formData: FormData): Promis
     // Serialise concurrent first visits, then refuse if someone already finished.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(7305001)`;
     if ((await tx.store.count()) > 0) return false;
-    const stored = await tx.appSetting.findUnique({ where: { key: "setup_code" } });
-    if (!stored || !codesMatch(setupCode, stored.value)) return "bad-code" as const;
+    if (needCode) {
+      const stored = await tx.appSetting.findUnique({ where: { key: "setup_code" } });
+      if (!stored || !codesMatch(setupCode, stored.value)) return "bad-code" as const;
+    }
     const store = await tx.store.create({ data: { name: storeName, slug: slugify(storeName), currency, timezone } });
     const user = await tx.user.upsert({ where: { email }, update: { name, passwordHash }, create: { email, name, passwordHash } });
     await tx.storeMembership.create({ data: { storeId: store.id, userId: user.id, role: "OWNER" } });
-    await tx.appSetting.delete({ where: { key: "setup_code" } });
+    await tx.appSetting.deleteMany({ where: { key: "setup_code" } });
     return { storeId: store.id, userId: user.id };
   });
   if (created === "bad-code") return { error: "That setup code is not right. Look for it in the server log." };
